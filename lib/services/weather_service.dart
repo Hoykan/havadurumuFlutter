@@ -1,40 +1,51 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:flutter/foundation.dart';
 
 class WeatherService {
   // Fonksiyonun ne döndüreceğini belirttik (Future<String>)
   Future<String> getLocation() async {
-    // Kullanıcının konumu açık mı kontrol ettik
+    debugPrint("B) getLocation başladi");
+
     final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    debugPrint("1) servis açık mı: $serviceEnabled");
     if (!serviceEnabled) {
-      // Sadece Future.error yazmak kodu durdurmaz, 'throw Exception' kullanmalıyız
       throw Exception("Konum servisi kapali");
     }
 
-    // Konum izni vermiş mi onu kontrol ettik
     LocationPermission permission = await Geolocator.checkPermission();
+    debugPrint("2) izin durumu: $permission");
     if (permission == LocationPermission.denied) {
-      // Konum izni vermemişse tekrar izin istedik
+      debugPrint("3) izin isteniyor");
       permission = await Geolocator.requestPermission();
+      debugPrint("4) izin sonucu: $permission");
       if (permission == LocationPermission.denied) {
         throw Exception("Konum izni vermelisiniz");
       }
     }
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception("Konum izni kalıcı olarak reddedildi");
+    }
 
-    // Kullanıcının pozisyonunu aldık (desiredAccuracy yerine güncel kullanım)
+    debugPrint("5) konum alınıyor");
     final Position position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 15),
+      ),
     );
+    debugPrint("6) konum: ${position.latitude}, ${position.longitude}");
 
-    // Kullanıcı pozisyonundan yerleşim noktasını bulduk
     final List<Placemark> placemarks = await Geocoding()
-        .placemarkFromCoordinates(position.latitude, position.longitude);
+        .placemarkFromCoordinates(position.latitude, position.longitude)
+        .timeout(const Duration(seconds: 10));
 
-    // Şehrimizi yerleşim noktasından kaydettik
-    final String? city = placemarks[0].locality;
+    if (placemarks.isEmpty) throw Exception("Adres bulunamadı");
+    final p = placemarks[0];
+    final String? city =
+        p.locality ?? p.subAdministrativeArea ?? p.administrativeArea;
 
-    if (city == null) throw Exception("Bir sorun oluştu");
-
+    if (city == null) throw Exception("Şehir bulunamadı");
     return city;
   }
 }

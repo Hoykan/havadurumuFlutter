@@ -11,11 +11,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   @override
   void initState() {
+    super.initState();
+    debugPrint("A) initState çalıştı");
     WeatherService()
         .getLocation()
-        .then((value) => print(value))
-        .catchError((error) => print(error));
-    super.initState();
+        .then((value) => debugPrint("Sehir = $value"))
+        .catchError((error) => debugPrint("Hata: $error"));
   }
 
   @override
