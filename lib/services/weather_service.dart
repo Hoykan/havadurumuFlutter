@@ -1,24 +1,22 @@
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/foundation.dart';
+import 'package:havadurumu/model/weather_model.dart';
 
 class WeatherService {
-  // Fonksiyonun ne döndüreceğini belirttik (Future<String>)
-  Future<String> getLocation() async {
-    debugPrint("B) getLocation başladi");
+  final Geocoding _geocoding = Geocoding();
 
+  Future<String> _getLocation() async {
     final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    debugPrint("1) servis açık mı: $serviceEnabled");
     if (!serviceEnabled) {
       throw Exception("Konum servisi kapali");
     }
 
     LocationPermission permission = await Geolocator.checkPermission();
-    debugPrint("2) izin durumu: $permission");
     if (permission == LocationPermission.denied) {
-      debugPrint("3) izin isteniyor");
       permission = await Geolocator.requestPermission();
-      debugPrint("4) izin sonucu: $permission");
       if (permission == LocationPermission.denied) {
         throw Exception("Konum izni vermelisiniz");
       }
@@ -27,16 +25,14 @@ class WeatherService {
       throw Exception("Konum izni kalıcı olarak reddedildi");
     }
 
-    debugPrint("5) konum alınıyor");
     final Position position = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         timeLimit: Duration(seconds: 15),
       ),
     );
-    debugPrint("6) konum: ${position.latitude}, ${position.longitude}");
 
-    final List<Placemark> placemarks = await Geocoding()
+    final List<Placemark> placemarks = await _geocoding
         .placemarkFromCoordinates(position.latitude, position.longitude)
         .timeout(const Duration(seconds: 10));
 
@@ -47,5 +43,32 @@ class WeatherService {
 
     if (city == null) throw Exception("Şehir bulunamadı");
     return city;
+  }
+
+  Future<List<WeatherModel>> getWeatherData() async {
+    final String city = await _getLocation();
+
+    const Map<String, String> header = {
+      'authorization': 'apikey 3D0oTFZgPCVCRueoCpewxd:1kXmsOCXXV6szXc3hdfEwv',
+      'content-type': 'application/json',
+    };
+
+    final dio = Dio();
+    final response = await dio.get(
+      'https://api.collectapi.com/weather/getWeather',
+      queryParameters: {'lang': 'tr', 'city': city},
+      options: Options(headers: header),
+    );
+    debugPrint(response.data.toString());
+
+    dynamic data = response.data;
+    if (data is String) data = jsonDecode(data);
+
+    // Gelen veri List ise doğrudan kullan, Map ise 'result' anahtarını al
+    final List list = data is List ? data : data['result'];
+
+    return list
+        .map((e) => WeatherModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
